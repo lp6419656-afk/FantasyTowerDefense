@@ -110,6 +110,35 @@ jobs:
         run: |
           set -euo pipefail
           echo "Project directory: $PROJECT_DIR"
+          python3 - <<'PY'
+          import re
+          import os
+          path = os.path.join(
+              os.environ["PROJECT_DIR"],
+              "export_presets.cfg"
+          )
+          with open(path, "r", encoding="utf-8") as f:
+              lines = f.readlines()
+          result = []
+          in_android_options = False
+          for line in lines:
+              stripped = line.strip()
+              if stripped.startswith("["):
+                  in_android_options = (
+                      stripped == "[preset.0.options]"
+                  )
+              if in_android_options and re.match(
+                  r'^(version/(min_sdk|target_sdk)|'
+                  r'gradle_build/(min_sdk|target_sdk))\s*=',
+                  stripped
+              ):
+                  print("Removing incompatible SDK override:", stripped)
+                  continue
+              result.append(line)
+          with open(path, "w", encoding="utf-8") as f:
+              f.writelines(result)
+          print("Android SDK export settings adjusted.")
+          PY
           godot --version
           if [ ! -f "$PROJECT_DIR/export_presets.cfg" ]; then
             echo "ERROR: export_presets.cfg is missing."
