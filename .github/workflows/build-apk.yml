@@ -189,12 +189,43 @@ jobs:
             --path "$PROJECT_DIR" \
             --editor \
             --import
-      # 9. 导出 APK
+      # 9. 检查 Android 配置并导出 APK
       - name: Export Android APK
         shell: bash
         run: |
           set -euo pipefail
+          echo "========== Godot Version =========="
+          godot --version
+          echo "========== Project Directory =========="
+          echo "$PROJECT_DIR"
+          echo "========== Android Export Presets =========="
+          if [ -f "$PROJECT_DIR/export_presets.cfg" ]; then
+            cat "$PROJECT_DIR/export_presets.cfg"
+          else
+            echo "ERROR: export_presets.cfg not found"
+            exit 1
+          fi
+          echo "========== Android SDK =========="
+          echo "ANDROID_HOME=${ANDROID_HOME:-not set}"
+          ls -la "${ANDROID_HOME:-/usr/local/lib/android/sdk}/platform-tools" || true
+          echo "========== Java =========="
+          java -version
+          echo "========== Godot Export Templates =========="
+          ls -lah "$HOME/.local/share/godot/export_templates/4.4.1.stable/" || true
+          echo "========== Export APK =========="
           mkdir -p "$GITHUB_WORKSPACE/output"
+          godot --headless \
+            --verbose \
+            --path "$PROJECT_DIR" \
+            --export-debug \
+            "Android" \
+            "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk"
+          if [ ! -s "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+          echo "APK generated successfully."
+          ls -lh "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk"
           godot --headless \
             --path "$PROJECT_DIR" \
             --export-debug \
