@@ -34,16 +34,31 @@ jobs:
         run: |
           set -euo pipefail
           GODOT_VERSION="4.4.1.stable"
-          TEMPLATE_URL="https://downloads.tuxfamily.org/godotengine/4.4.1/Godot_v4.4.1-stable_export_templates.tpz"
-          mkdir -p /tmp/godot-templates
-          mkdir -p "$HOME/.local/share/godot/export_templates/$GODOT_VERSION"
-          curl -fL --retry 3 "$TEMPLATE_URL" \
-            -o /tmp/godot-templates/templates.tpz
-          unzip -oq /tmp/godot-templates/templates.tpz \
-            -d /tmp/godot-templates/extracted
-          cp -a /tmp/godot-templates/extracted/templates/. \
-            "$HOME/.local/share/godot/export_templates/$GODOT_VERSION/"
-          echo "Godot Android export templates installed."
+          TEMPLATE_URL="https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz"
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/$GODOT_VERSION"
+          DOWNLOAD_DIR="/tmp/godot-templates"
+          mkdir -p "$TEMPLATE_DIR" "$DOWNLOAD_DIR"
+          echo "Downloading Godot export templates..."
+          curl -fL --retry 5 --retry-delay 2 \
+            "$TEMPLATE_URL" \
+            -o "$DOWNLOAD_DIR/templates.tpz"
+          echo "Extracting Godot export templates..."
+          unzip -oq "$DOWNLOAD_DIR/templates.tpz" \
+            -d "$DOWNLOAD_DIR/extracted"
+          if [ ! -d "$DOWNLOAD_DIR/extracted/templates" ]; then
+            echo "ERROR: Export templates archive has an unexpected structure."
+            find "$DOWNLOAD_DIR/extracted" -maxdepth 2 -type f | head -50
+            exit 1
+          fi
+          cp -a "$DOWNLOAD_DIR/extracted/templates/." "$TEMPLATE_DIR/"
+          echo "Checking Android export templates..."
+          if [ ! -f "$TEMPLATE_DIR/android_debug.apk" ] || \
+             [ ! -f "$TEMPLATE_DIR/android_release.apk" ]; then
+            echo "ERROR: Android export templates are missing."
+            ls -lah "$TEMPLATE_DIR"
+            exit 1
+          fi
+          echo "Godot Android export templates installed successfully." 
       # 6. 解压游戏工程
       - name: Extract game project
         shell: bash
