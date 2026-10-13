@@ -105,6 +105,40 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
       # 8. 导入 Godot 项目并检查导出配置
+      # 配置 Godot 的 Android SDK、Java 和调试签名
+      - name: Configure Godot Android settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDK_PATH="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          JAVA_PATH="${JAVA_HOME:?JAVA_HOME is not set}"
+          KEYSTORE_PATH="$HOME/.android/debug.keystore"
+          SETTINGS_DIR="$HOME/.config/godot"
+          mkdir -p "$SETTINGS_DIR"
+          if [ ! -d "$SDK_PATH/platform-tools" ]; then
+            echo "ERROR: Android SDK platform-tools not found: $SDK_PATH"
+            exit 1
+          fi
+          if [ ! -x "$JAVA_PATH/bin/java" ]; then
+            echo "ERROR: Java executable not found: $JAVA_PATH/bin/java"
+            exit 1
+          fi
+          if [ ! -f "$KEYSTORE_PATH" ]; then
+            echo "ERROR: Debug keystore not found: $KEYSTORE_PATH"
+            exit 1
+          fi
+          cat > "$SETTINGS_DIR/editor_settings-4.tres" <<EOF
+          [gd_resource type="EditorSettings" format=3]
+          [resource]
+          export/android/android_sdk_path = "$SDK_PATH"
+          export/android/java_sdk_path = "$JAVA_PATH"
+          export/android/debug_keystore = "$KEYSTORE_PATH"
+          export/android/debug_keystore_user = "androiddebugkey"
+          export/android/debug_keystore_pass = "android"
+          EOF
+          echo "Android SDK: $SDK_PATH"
+          echo "Java SDK: $JAVA_PATH"
+          echo "Godot Android settings configured."
       - name: Import and validate project
         shell: bash
         run: |
