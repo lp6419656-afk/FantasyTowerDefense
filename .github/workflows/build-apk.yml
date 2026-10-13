@@ -1,0 +1,42 @@
+name: Build Fantasy Tower Defense APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.4.1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract game project
+        run: |
+          unzip -q FantasyTowerDefense_Godot_Upgrade.zip
+          mv FantasyTowerDefense_Godot_Upgrade GameProject
+
+      - name: Prepare build folder
+        run: mkdir -p GameProject/build
+
+      - name: Import project
+        run: |
+          godot --headless --editor --path GameProject --quit
+
+      - name: Build Android APK
+        run: |
+          godot --headless --path GameProject \
+            --export-debug "Android" \
+            GameProject/build/FantasyTowerDefense.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: FantasyTowerDefense-APK
+          path: GameProject/build/FantasyTowerDefense.apk
+          if-no-files-found: error
