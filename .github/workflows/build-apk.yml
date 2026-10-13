@@ -87,6 +87,33 @@ jobs:
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
           echo "Game project found at: $PROJECT_DIR"
       # 7. 配置 Android 调试签名
+      - name: Diagnose and patch Android export settings
+       shell: bash
+       run: |
+         set -euo pipefail
+
+         echo "========== Main.gd lines 108-130 =========="
+         if [ -f "$PROJECT_DIR/Main.gd" ]; then
+           nl -ba "$PROJECT_DIR/Main.gd" | sed -n '108,130p'
+         else
+           echo "Main.gd not found at project root; searching..."
+           find "$PROJECT_DIR" -name "Main.gd" -print
+         fi
+
+         echo "========== Android export settings before patch =========="
+         grep -nE 'min_sdk|target_sdk|use_gradle_build' \
+           "$PROJECT_DIR/export_presets.cfg" || true
+
+         echo "========== Removing incompatible SDK overrides =========="
+         sed -i -E \
+           '/^[[:space:]]*version\/(min_sdk|target_sdk)[[:space:]]*=/d' \
+           "$PROJECT_DIR/export_presets.cfg"
+
+         echo "========== Android export settings after patch =========="
+         grep -nE 'min_sdk|target_sdk|use_gradle_build' \
+           "$PROJECT_DIR/export_presets.cfg" || true
+
+         echo "Diagnostic and configuration patch completed."
       - name: Configure Android signing
         shell: bash
         run: |
