@@ -1,377 +1,149 @@
 name: Build Android APK
-
-
-
 on:
-
- workflow_dispatch:
-
-
-
+  workflow_dispatch:
 permissions:
-
- contents: read
-
-
-
+  contents: read
 jobs:
-
- build:
-
-   name: Build FantasyTowerDefense APK
-
-   runs-on: ubuntu-latest
-
-
-
-   steps:
-
-     # 1. 下载仓库文件
-
-     - name: Checkout repository
-
-       uses: actions/checkout@v4
-
-
-
-     # 2. 安装 Java 17
-
-     - name: Set up Java
-
-       uses: actions/setup-java@v4
-
-       with:
-
-         distribution: temurin
-
-         java-version: '17'
-
-
-
-     # 3. 安装 Android SDK
-
-     # 显式指定需要的 SDK 包，避免寻找已经废弃的 tools 包
-
-     - name: Set up Android SDK
-
-       uses: android-actions/setup-android@v3
-
-       with:
-
-         packages: 'platform-tools platforms;android-33 platforms;android-35 build-tools;33.0.2 build-tools;35.0.1'
-
-
-
-     # 4. 安装 Godot 4.4.1
-
-     - name: Set up Godot
-
-       uses: chickensoft-games/setup-godot@v2
-
-       with:
-
-         version: 4.4.1
-
-
-
-     # 5. 安装 Godot 安卓导出模板
-
-     - name: Install Godot export templates
-
-       shell: bash
-
-       run: |
-
-         set -euo pipefail
-
-
-
-         GODOT_VERSION="4.4.1.stable"
-
-         TEMPLATE_URL="https://downloads.tuxfamily.org/godotengine/4.4.1/Godot_v4.4.1-stable_export_templates.tpz"
-
-
-
-         mkdir -p /tmp/godot-templates
-
-         mkdir -p "$HOME/.local/share/godot/export_templates/$GODOT_VERSION"
-
-
-
-         curl -fL --retry 3 "$TEMPLATE_URL" \
-
-           -o /tmp/godot-templates/templates.tpz
-
-
-
-         unzip -oq /tmp/godot-templates/templates.tpz \
-
-           -d /tmp/godot-templates/extracted
-
-
-
-         cp -a /tmp/godot-templates/extracted/templates/. \
-
-           "$HOME/.local/share/godot/export_templates/$GODOT_VERSION/"
-
-
-
-         echo "Godot Android export templates installed."
-
-
-
-     # 6. 解压游戏工程
-
-     - name: Extract game project
-
-       shell: bash
-
-       run: |
-
-         set -euo pipefail
-
-
-
-         ZIP_FILE="FantasyTowerDefense_Godot_Upgrade.zip"
-
-
-
-         if [ ! -f "$ZIP_FILE" ]; then
-
-           echo "ERROR: Game project ZIP not found: $ZIP_FILE"
-
-           echo "Files in repository:"
-
-           ls -la
-
-           exit 1
-
-         fi
-
-
-
-         mkdir -p "$GITHUB_WORKSPACE/GameProject"
-
-
-
-         unzip -oq "$ZIP_FILE" \
-
-           -d "$GITHUB_WORKSPACE/GameProject"
-
-
-
-         PROJECT_FILE="$(find "$GITHUB_WORKSPACE/GameProject" \
-
-           -type f -name project.godot -print -quit)"
-
-
-
-         if [ -z "$PROJECT_FILE" ]; then
-
-           echo "ERROR: project.godot was not found in the ZIP."
-
-           find "$GITHUB_WORKSPACE/GameProject" \
-
-             -maxdepth 3 -type f | head -100
-
-           exit 1
-
-         fi
-
-
-
-         PROJECT_DIR="$(dirname "$PROJECT_FILE")"
-
-         echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
-
-
-
-         echo "Game project found at: $PROJECT_DIR"
-
-
-
-     # 7. 配置 Android 调试签名
-
-     - name: Configure Android signing
-
-       shell: bash
-
-       run: |
-
-         set -euo pipefail
-
-
-
-         mkdir -p "$HOME/.android"
-
-
-
-         keytool -genkeypair \
-
-           -keystore "$HOME/.android/debug.keystore" \
-
-           -storepass android \
-
-           -alias androiddebugkey \
-
-           -keypass android \
-
-           -keyalg RSA \
-
-           -keysize 2048 \
-
-           -validity 10000 \
-
-           -dname "CN=Android Debug,O=Android,C=US" \
-
-           -noprompt
-
-
-
-         echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
-
-         echo "ANDROID_KEYSTORE=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
-
-
-
-     # 8. 导入 Godot 项目并检查导出配置
-
-     - name: Import and validate project
-
-       shell: bash
-
-       run: |
-
-         set -euo pipefail
-
-
-
-         echo "Project directory: $PROJECT_DIR"
-
-
-
-         godot --version
-
-
-
-         if [ ! -f "$PROJECT_DIR/export_presets.cfg" ]; then
-
-           echo "ERROR: export_presets.cfg is missing."
-
-           echo "The project must have an Android export preset named Android."
-
-           exit 1
-
-         fi
-
-
-
-         if ! grep -q 'name="Android"' \
-
-           "$PROJECT_DIR/export_presets.cfg"; then
-
-           echo "ERROR: Android export preset was not found."
-
-           cat "$PROJECT_DIR/export_presets.cfg"
-
-           exit 1
-
-         fi
-
-
-
-         godot --headless \
-
-           --path "$PROJECT_DIR" \
-
-           --editor \
-
-           --import
-
-
-
-     # 9. 导出 APK
-
-     - name: Export Android APK
-
-       shell: bash
-
-       run: |
-
-         set -euo pipefail
-
-
-
-         mkdir -p "$GITHUB_WORKSPACE/output"
-
-
-
-         godot --headless \
-
-           --path "$PROJECT_DIR" \
-
-           --export-debug \
-
-           "Android" \
-
-           "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk"
-
-
-
-         if [ ! -s "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk" ]; then
-
-           echo "ERROR: APK was not generated."
-
-           exit 1
-
-         fi
-
-
-
-         echo "APK generated successfully."
-
-         ls -lh "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk"
-
-
-
-     # 10. 上传 APK，供手机下载安装
-
-     - name: Upload Android APK
-
-       if: success()
-
-       uses: actions/upload-artifact@v4
-
-       with:
-
-         name: FantasyTowerDefense-Android-APK
-
-         path: output/FantasyTowerDefense.apk
-
-         if-no-files-found: error
-
-         retention-days: 7
-
-
-
-     # 11. 失败时保留诊断信息
-
-     - name: Upload diagnostic logs
-
-       if: failure()
-
-       uses: actions/upload-artifact@v4
-
-       with:
-
-         name: FantasyTowerDefense-Build-Logs
-
-         path: |
-
-           GameProject/export_presets.cfg
-
-           GameProject/project.godot
-
-         if-no-files-found: ignore
-
-         retention-days: 7
+  build:
+    name: Build FantasyTowerDefense APK
+    runs-on: ubuntu-latest
+    steps:
+      # 1. 下载仓库文件
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      # 2. 安装 Java 17
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      # 3. 安装 Android SDK
+      # 显式指定需要的 SDK 包，避免寻找已经废弃的 tools 包
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-33 platforms;android-35 build-tools;33.0.2 build-tools;35.0.1'
+      # 4. 安装 Godot 4.4.1
+      - name: Set up Godot
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.4.1
+      # 5. 安装 Godot 安卓导出模板
+      - name: Install Godot export templates
+        shell: bash
+        run: |
+          set -euo pipefail
+          GODOT_VERSION="4.4.1.stable"
+          TEMPLATE_URL="https://downloads.tuxfamily.org/godotengine/4.4.1/Godot_v4.4.1-stable_export_templates.tpz"
+          mkdir -p /tmp/godot-templates
+          mkdir -p "$HOME/.local/share/godot/export_templates/$GODOT_VERSION"
+          curl -fL --retry 3 "$TEMPLATE_URL" \
+            -o /tmp/godot-templates/templates.tpz
+          unzip -oq /tmp/godot-templates/templates.tpz \
+            -d /tmp/godot-templates/extracted
+          cp -a /tmp/godot-templates/extracted/templates/. \
+            "$HOME/.local/share/godot/export_templates/$GODOT_VERSION/"
+          echo "Godot Android export templates installed."
+      # 6. 解压游戏工程
+      - name: Extract game project
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_FILE="FantasyTowerDefense_Godot_Upgrade.zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "ERROR: Game project ZIP not found: $ZIP_FILE"
+            echo "Files in repository:"
+            ls -la
+            exit 1
+          fi
+          mkdir -p "$GITHUB_WORKSPACE/GameProject"
+          unzip -oq "$ZIP_FILE" \
+            -d "$GITHUB_WORKSPACE/GameProject"
+          PROJECT_FILE="$(find "$GITHUB_WORKSPACE/GameProject" \
+            -type f -name project.godot -print -quit)"
+          if [ -z "$PROJECT_FILE" ]; then
+            echo "ERROR: project.godot was not found in the ZIP."
+            find "$GITHUB_WORKSPACE/GameProject" \
+              -maxdepth 3 -type f | head -100
+            exit 1
+          fi
+          PROJECT_DIR="$(dirname "$PROJECT_FILE")"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+          echo "Game project found at: $PROJECT_DIR"
+      # 7. 配置 Android 调试签名
+      - name: Configure Android signing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.android"
+          keytool -genkeypair \
+            -keystore "$HOME/.android/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US" \
+            -noprompt
+          echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
+          echo "ANDROID_KEYSTORE=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
+      # 8. 导入 Godot 项目并检查导出配置
+      - name: Import and validate project
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Project directory: $PROJECT_DIR"
+          godot --version
+          if [ ! -f "$PROJECT_DIR/export_presets.cfg" ]; then
+            echo "ERROR: export_presets.cfg is missing."
+            echo "The project must have an Android export preset named Android."
+            exit 1
+          fi
+          if ! grep -q 'name="Android"' \
+            "$PROJECT_DIR/export_presets.cfg"; then
+            echo "ERROR: Android export preset was not found."
+            cat "$PROJECT_DIR/export_presets.cfg"
+            exit 1
+          fi
+          godot --headless \
+            --path "$PROJECT_DIR" \
+            --editor \
+            --import
+      # 9. 导出 APK
+      - name: Export Android APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          godot --headless \
+            --path "$PROJECT_DIR" \
+            --export-debug \
+            "Android" \
+            "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk"
+          if [ ! -s "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk" ]; then
+            echo "ERROR: APK was not generated."
+            exit 1
+          fi
+          echo "APK generated successfully."
+          ls -lh "$GITHUB_WORKSPACE/output/FantasyTowerDefense.apk"
+      # 10. 上传 APK，供手机下载安装
+      - name: Upload Android APK
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FantasyTowerDefense-Android-APK
+          path: output/FantasyTowerDefense.apk
+          if-no-files-found: error
+          retention-days: 7
+      # 11. 失败时保留诊断信息
+      - name: Upload diagnostic logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FantasyTowerDefense-Build-Logs
+          path: |
+            GameProject/export_presets.cfg
+            GameProject/project.godot
+          if-no-files-found: ignore
+          retention-days: 7
