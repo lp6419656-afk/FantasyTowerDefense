@@ -105,7 +105,7 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}" >> "$GITHUB_ENV"
           echo "ANDROID_KEYSTORE=$HOME/.android/debug.keystore" >> "$GITHUB_ENV"
       # 8. 导入 Godot 项目并检查导出配置
-      # 配置 Godot 的 Android SDK、Java 和调试签名
+      # 配置 Godot 4.4.1 的 Android SDK、Java 和签名
       - name: Configure Godot Android settings
         shell: bash
         run: |
@@ -115,19 +115,12 @@ jobs:
           KEYSTORE_PATH="$HOME/.android/debug.keystore"
           SETTINGS_DIR="$HOME/.config/godot"
           mkdir -p "$SETTINGS_DIR"
-          if [ ! -d "$SDK_PATH/platform-tools" ]; then
-            echo "ERROR: Android SDK platform-tools not found: $SDK_PATH"
-            exit 1
-          fi
-          if [ ! -x "$JAVA_PATH/bin/java" ]; then
-            echo "ERROR: Java executable not found: $JAVA_PATH/bin/java"
-            exit 1
-          fi
-          if [ ! -f "$KEYSTORE_PATH" ]; then
-            echo "ERROR: Debug keystore not found: $KEYSTORE_PATH"
-            exit 1
-          fi
-          cat > "$SETTINGS_DIR/editor_settings-4.tres" <<EOF
+          test -x "$JAVA_PATH/bin/java"
+          test -x "$SDK_PATH/platform-tools/adb"
+          test -f "$KEYSTORE_PATH"
+          # Godot 4.4.1 实际读取的配置文件
+          SETTINGS_FILE="$SETTINGS_DIR/editor_settings-4.4.tres"
+          cat > "$SETTINGS_FILE" <<EOF
           [gd_resource type="EditorSettings" format=3]
           [resource]
           export/android/android_sdk_path = "$SDK_PATH"
@@ -136,59 +129,9 @@ jobs:
           export/android/debug_keystore_user = "androiddebugkey"
           export/android/debug_keystore_pass = "android"
           EOF
-          echo "Android SDK: $SDK_PATH"
-          echo "Java SDK: $JAVA_PATH"
-          echo "Godot Android settings configured."
-      - name: Import and validate project
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Project directory: $PROJECT_DIR"
-          python3 - <<'PY'
-          import re
-          import os
-          path = os.path.join(
-              os.environ["PROJECT_DIR"],
-              "export_presets.cfg"
-          )
-          with open(path, "r", encoding="utf-8") as f:
-              lines = f.readlines()
-          result = []
-          in_android_options = False
-          for line in lines:
-              stripped = line.strip()
-              if stripped.startswith("["):
-                  in_android_options = (
-                      stripped == "[preset.0.options]"
-                  )
-              if in_android_options and re.match(
-                  r'^(version/(min_sdk|target_sdk)|'
-                  r'gradle_build/(min_sdk|target_sdk))\s*=',
-                  stripped
-              ):
-                  print("Removing incompatible SDK override:", stripped)
-                  continue
-              result.append(line)
-          with open(path, "w", encoding="utf-8") as f:
-              f.writelines(result)
-          print("Android SDK export settings adjusted.")
-          PY
-          godot --version
-          if [ ! -f "$PROJECT_DIR/export_presets.cfg" ]; then
-            echo "ERROR: export_presets.cfg is missing."
-            echo "The project must have an Android export preset named Android."
-            exit 1
-          fi
-          if ! grep -q 'name="Android"' \
-            "$PROJECT_DIR/export_presets.cfg"; then
-            echo "ERROR: Android export preset was not found."
-            cat "$PROJECT_DIR/export_presets.cfg"
-            exit 1
-          fi
-          godot --headless \
-            --path "$PROJECT_DIR" \
-            --editor \
-            --import
+          echo "Godot Android settings saved:"
+          echo "$SETTINGS_FILE"
+          cat "$SETTINGS_FILE"
       # 9. 检查 Android 配置并导出 APK
       - name: Export Android APK
         shell: bash
