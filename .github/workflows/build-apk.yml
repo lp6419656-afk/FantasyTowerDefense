@@ -23,11 +23,12 @@ jobs:
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-33 platforms;android-35 build-tools;33.0.2 build-tools;35.0.1'
-      # 4. 安装 Godot 4.4.1
+      # 安装普通版 Godot，不使用 Mono/.NET 版本
       - name: Set up Godot
         uses: chickensoft-games/setup-godot@v2
         with:
           version: 4.4.1
+          use-dotnet: false
       # 5. 安装 Godot 安卓导出模板
       - name: Install Godot export templates
         shell: bash
